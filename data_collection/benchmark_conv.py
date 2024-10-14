@@ -2,59 +2,101 @@ import torch
 import numpy as np
 import time
 
+class BenchmarkConv:
+    def __init__(self,
+                 batchsize,
+                 matsize,
+                 kernelsize,
+                 channels_in,
+                 channels_out,
+                 strides,
+                 padding,
+                 activation,
+                 use_bias,
+                 optimizer,
+                 device,
+                 warmup_iterations,
+                 benchmark_iterations):
 
-def benchmark_conv(batchsize,
-                   matsize,
-                   kernelsize,
-                   channels_in,
-                   channels_out,
-                   strides,
-                   padding,
-                   activation,
-                   use_bias,
-                   optimizer,
-                   device,
-                   warmup_iterations,
-                   benchmark_iterations):
-    
-    conv = torch.nn.Conv2d(channels_in, channels_out, kernel_size=kernelsize, stride=strides, padding=padding, bias=use_bias).to(device)
-    if activation != 'None':
-        activation_fn = getattr(torch.nn, activation)().to(device)
-    if optimizer != 'None':
-        optimizer_fn = getattr(torch.optim, optimizer)(conv.parameters(), lr=0.0001)
-        criterion = torch.nn.MSELoss()
+        self.batch_size = batchsize
+        self.matsize = matsize
+        self.kernelsize = kernelsize
+        self.channels_in = channels_in
+        self.channels_out = channels_out
+        self.strides = strides
+        self.padding = padding
+        self.activation = activation
+        self.use_bias = use_bias
+        self.optimizer = optimizer
+        self.device = device
+        self.warmup_iterations = warmup_iterations
+        self.benchmark_iterations = benchmark_iterations
+        
+        self.activation_fn = None
+        self.optimizer_fn = None
+        self.criterion = None
 
-    target_size = 0
-    if padding == 'same':
-        target_size = np.ceil((matsize / strides)).astype(int)
-    else:
-        target_size = np.ceil((matsize - kernelsize + 1) / strides).astype(int)
-    
-    # Warm-up
-    for _ in range(warmup_iterations):
-        x = torch.randn(batchsize, channels_in, matsize, matsize, device=device)
-        y = activation_fn(conv(x)) if activation != 'None' else conv(x)
-        if optimizer != 'None':
-            target = torch.randn(batchsize, channels_out, target_size, target_size, device=device)
-            optimizer_fn.zero_grad()
-            loss = criterion(y, target)
-            loss.backward()
-            optimizer_fn.step()
-    
+        # Create the convolutional layer
+        self.conv = torch.nn.Conv2d(self.channels_in, self.channels_out, 
+                                    kernel_size=self.kernelsize, 
+                                    stride=self.strides, 
+                                    padding=self.padding, 
+                                    bias=self.use_bias).to(self.device)
 
-    # Benchmark
-    torch.cuda.synchronize()
-    start_time = time.time()
-    for _ in range(benchmark_iterations):
-        x = torch.randn(batchsize, channels_in, matsize, matsize, device=device)
-        y = activation_fn(conv(x)) if activation != 'None' else conv(x)
-        if optimizer != 'None':
-            target = torch.randn(batchsize, channels_out, target_size, target_size, device=device)
-            optimizer_fn.zero_grad()
-            loss = criterion(y, target)
-            loss.backward()
-            optimizer_fn.step()
-    torch.cuda.synchronize()
-    end_time = time.time()
-    
-    return (end_time - start_time) / benchmark_iterations * 1000 # Return time in ms
+        # Activation function, if specified
+        if self.activation != 'None':
+            self.activation_fn = getattr(torch.nn, self.activation)().to(self.device)
+
+        # Optimizer and loss function, if specified
+        if self.optimizer != 'None':
+            self.optimizer_fn = getattr(torch.optim, self.optimizer)(self.conv.parameters(), lr=0.0001)
+            self.criterion = torch.nn.MSELoss()
+
+        # Calculate target output size based on padding
+        if self.padding == 'same':
+            self.target_size = np.ceil((self.matsize / self.strides)).astype(int)
+        else:
+            self.target_size = np.ceil((self.matsize - self.kernelsize + 1) / self.strides).astype(int)
+
+
+    def _forward_pass(self):
+        x = torch.randn(self.batch_size, self.channels_in, self.matsize, self.matsize, device=self.device)
+        y = self.conv(x)
+        
+        if self.activation_fn:
+            y = self.activation_fn(y)
+
+        return y
+
+
+    def _backward_pass(self, y):
+        target = torch.randn(self.batch_size, self.channels_out, self.target_size, self.target_size, device=self.device)
+        self.optimizer_fn.zero_grad()
+        loss = self.criterion(y, target)
+        loss.backward()
+        self.optimizer_fn.step()
+
+        return loss
+
+
+    def run_benchmark(self):
+        # Warm-up phase
+        for _ in range(self.warmup_iterations):
+            y = self._forward_pass()
+            if self.optimizer_fn:
+                self._backward_pass(y)
+
+
+        # Benchmark phase
+        torch.cuda.synchronize()  # Ensure GPU timing accuracy
+        start_time = time.time()
+        for _ in range(self.benchmark_iterations):
+            y = self._forward_pass()
+            if self.optimizer_fn:
+                self._backward_pass(y)
+        torch.cuda.synchronize()
+        end_time = time.time()
+
+
+        # Return time in ms
+        return (end_time - start_time) / self.benchmark_iterations * 1000

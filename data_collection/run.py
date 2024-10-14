@@ -7,9 +7,9 @@ import numpy as np
 import pandas as pd
 
 
-from .benchmark_rnn import benchmark_rnn
-from .benchmark_conv import benchmark_conv
-from .benchmark_dense import benchmark_dense
+from .benchmark_dense import BenchmarkDense
+from .benchmark_conv import BenchmarkConv
+from .benchmark_rnn import BenchmarkRNN
 
 
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
@@ -24,6 +24,14 @@ parser.add_argument('--testConv', action="store_true", default=False,
                     help='Benchmark 2D convolution')
 parser.add_argument('--testRNN', action="store_true", default=False,
                     help='Benchmark RNN')
+parser.add_argument('--testAttention', action="store_true", default=False,
+                    help='Benchmark attention mechanism')
+parser.add_argument('--testLayerNorm', action="store_true", default=False,
+                    help='Benchmark layer normalization')
+parser.add_argument('--testEmbedding', action="store_true", default=False,
+                    help='Benchmark embedding layer')
+parser.add_argument('--testEncoderDecoder', action="store_true", default=False,
+                    help='Benchmark encoder-decoder architecture')
 # General parameters
 parser.add_argument('--backprop_ratio', type=float, default=0.5,
                     help='Ratio of iterations with backward pass ([0..1])')
@@ -96,7 +104,7 @@ def main():
             print(f"Benchmarking RNN, starting repetition {rep}")
             for i in range(args.num_val):
                 try:
-                    timeUsed[i, rep] = benchmark_rnn(
+                    timeUsed[i, rep] = BenchmarkRNN(
                         batchsize[i],
                         seq_len[i],
                         input_dim[i],
@@ -109,7 +117,8 @@ def main():
                         device,
                         args.iter_warmup,
                         args.iter_benchmark
-                    )
+                    ).run_benchmark()
+
                 except RuntimeError as e:
                     print(f'Error: {e}')
                     timeUsed[i, rep] = None
@@ -178,7 +187,7 @@ def main():
             print(f"Benchmarking convolution, starting repetition {rep}")
             for i in range(args.num_val):
                 try:
-                    timeUsed[i, rep] = benchmark_conv(
+                    timeUsed[i, rep] = BenchmarkConv(
                         batchsize[i],
                         matsize[i],
                         kernelsize[i],
@@ -192,7 +201,8 @@ def main():
                         device,
                         args.iter_warmup,
                         args.iter_benchmark
-                    )
+                    ).run_benchmark()
+
                 except RuntimeError as e:
                     print(f'Error: {e}')
                     timeUsed[i, rep] = None
@@ -253,7 +263,7 @@ def main():
             print(f"Benchmarking fully connected, starting repetition {rep}")
             for i in range(args.num_val):
                 try:
-                    timeUsed[i, rep] = benchmark_dense(
+                    timeUsed[i, rep] = BenchmarkDense(
                         batchsize[i],
                         dim_input[i],
                         dim_output[i],
@@ -262,7 +272,8 @@ def main():
                         device,
                         args.iter_warmup,
                         args.iter_benchmark
-                    )
+                    ).run_benchmark()
+
                 except RuntimeError as e:
                     print(f'Error: {e}')
                     timeUsed[i, rep] = None
