@@ -1,15 +1,20 @@
 import os
 import gc
 import time
+import random
 import torch
 import argparse
 import numpy as np
 import pandas as pd
 
 
-from .benchmark_dense import BenchmarkDense
-from .benchmark_conv import BenchmarkConv
-from .benchmark_rnn import BenchmarkRNN
+from benchmark_dense import BenchmarkDense
+from benchmark_conv import BenchmarkConv
+from benchmark_rnn import BenchmarkRNN
+from benchmark_attention import MultiHeadAttentionBenchmark
+from benchmark_layernorm import LayerNormBenchmark
+from benchmark_embedding import EmbeddingBenchmark
+from benchmark_positional_encoding import PositionalEncodingBenchmark
 
 
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
@@ -30,8 +35,8 @@ parser.add_argument('--testLayerNorm', action="store_true", default=False,
                     help='Benchmark layer normalization')
 parser.add_argument('--testEmbedding', action="store_true", default=False,
                     help='Benchmark embedding layer')
-parser.add_argument('--testEncoderDecoder', action="store_true", default=False,
-                    help='Benchmark encoder-decoder architecture')
+parser.add_argument('--testPositionalEncoding', action="store_true", default=False,
+                    help='Benchmark positional endcoding')
 # General parameters
 parser.add_argument('--backprop_ratio', type=float, default=0.5,
                     help='Ratio of iterations with backward pass ([0..1])')
@@ -70,6 +75,271 @@ def main():
         'Tanh',
         'Sigmoid'
     ]
+    
+    
+    ########### Benchmark LayerNorm ##########
+    if args.testLayerNorm:
+        if args.logfile == '':
+            logfile = str('%s/benchmark_layernorm_%s_%s'
+                          % (args.logdir, args.device, time.strftime("%Y%m%d")))
+            
+        else:
+            logfile = '%s/%s' % (args.logdir, args.logfile)
+            
+        print('Benchmarking LayerNorm...')
+        batchsize = np.random.randint(1, 65, size=args.num_val)
+        seq_len = np.random.randint(1, 513, size=args.num_val)
+        embed_dim = np.random.randint(32, 1025, size=args.num_val)
+        optimizer = np.zeros(args.num_val, dtype=np.int32)
+        precision = (np.ones(args.num_val) * 32).astype(int)
+        
+        timeUsed = np.zeros([args.num_val, args.repetitions])
+        
+        for i in range(args.num_val):
+            if np.random.rand() <= args.backprop_ratio:
+                optimizer[i] = np.random.randint(1, len(optimizer_list))
+            else:
+                optimizer[i] = 0
+        
+        for rep in range(args.repetitions):
+            print(f"Benchmarking layernorm, starting repetition {rep}")
+            for i in range(args.num_val):
+                try:
+                    timeUsed[i, rep] = LayerNormBenchmark(
+                        batchsize[i],
+                        seq_len[i],
+                        embed_dim[i],
+                        optimizer_list[optimizer[i]],
+                        args.iter_warmup,
+                        args.iter_benchmark,
+                        device,
+                    ).run_benchmark()
+
+                except RuntimeError as e:
+                    print(f'Error: {e}')
+                    timeUsed[i, rep] = None
+                
+                if (i + 1) % 100 == 0:
+                    print(f"Iteration {i + 1}/{args.num_val}: Finished layernorm {i + 1}/{args.num_val} (Rep {rep + 1}/{args.repetitions})")
+                
+                gc.collect()
+            if device == 'cuda':
+                torch.cuda.empty_cache()
+                
+        # Save results
+        print("Saving results")
+        df_results = pd.DataFrame({
+            'batchsize': batchsize,
+            'seq_len': seq_len,
+            'embed_dim': embed_dim,
+            'precision': precision,
+            'optimizer': optimizer,
+            'timeUsed_median': np.median(timeUsed, 1),
+            'timeUsed_min': np.min(timeUsed, 1),
+            'timeUsed_max': np.max(timeUsed, 1),
+            'timeUsed_std': np.std(timeUsed, 1)})
+        
+        print(df_results)
+        df_results.to_csv(f'{logfile}.csv')
+    
+    
+    ########### Benchmark Attention ##########
+    if args.testAttention:
+        if args.logfile == '':
+            logfile = str('%s/benchmark_attention_%s_%s'
+                          % (args.logdir, args.device, time.strftime("%Y%m%d")))
+        else:
+            logfile = '%s/%s' % (args.logdir, args.logfile)
+            
+        print('Benchmarking Attention...')
+        batchsize = np.random.randint(1, 65, size=args.num_val)
+        seq_len = np.random.randint(1, 257, size=args.num_val)
+        num_heads_list = np.random.randint(1, 13, size=args.num_val)
+        optimizer = np.zeros(args.num_val, dtype=np.int32)
+        precision = (np.ones(args.num_val) * 32).astype(int)
+        
+        timeUsed = np.zeros([args.num_val, args.repetitions])
+        
+        for i in range(args.num_val):
+            if np.random.rand() <= args.backprop_ratio:
+                optimizer[i] = np.random.randint(1, len(optimizer_list))
+            else:
+                optimizer[i] = 0
+        
+        for rep in range(args.repetitions):
+            print(f"Benchmarking attention, starting repetition {rep}")
+            for i in range(args.num_val):
+                num_heads = num_heads_list[i]
+
+                # Ensure embed_dim is divisible by num_heads
+                min_embed_dim = num_heads * 8  # Minimum to ensure divisibility
+                max_embed_dim = 768 # Max embed_dim = 768, common in BERT base
+                embed_dim = random.randint(min_embed_dim, max_embed_dim)
+                embed_dim = (embed_dim // num_heads) * num_heads
+                
+                try:
+                    timeUsed[i, rep] = MultiHeadAttentionBenchmark(
+                        batchsize[i],
+                        seq_len[i],
+                        embed_dim,
+                        num_heads_list[i],
+                        optimizer_list[optimizer[i]],
+                        args.iter_warmup,
+                        args.iter_benchmark,
+                        device,
+                    ).run_benchmark()
+
+                except RuntimeError as e:
+                    print(f'Error: {e}')
+                
+                if (i + 1) % 100 == 0:
+                    print(f"Iteration {i + 1}/{args.num_val}: Finished attention {i + 1}/{args.num_val} (Rep {rep + 1}/{args.repetitions})")
+                
+                gc.collect()
+            if device == 'cuda':
+                torch.cuda.empty_cache()
+                
+        # Save results
+        print("Saving results")
+        df_results = pd.DataFrame({
+            'batchsize': batchsize,
+            'seq_len': seq_len,
+            'num_heads': num_heads_list,
+            'precision': precision,
+            'optimizer': optimizer,
+            'timeUsed_median': np.median(timeUsed, 1),
+            'timeUsed_min': np.min(timeUsed, 1),
+            'timeUsed_max': np.max(timeUsed, 1),
+            'timeUsed_std': np.std(timeUsed, 1)})
+        
+        print(df_results)
+        df_results.to_csv(f'{logfile}.csv')
+
+    
+    ########### Benchmark Positional Encoding ##########
+    if args.testPositionalEncoding:
+        if args.logfile == '':
+            logfile = str('%s/benchmark_positional_encoding_%s_%s'
+                          % (args.logdir, args.device, time.strftime("%Y%m%d")))
+        else:
+            logfile = '%s/%s' % (args.logdir, args.logfile)
+            
+        print('Benchmarking Positional Encoding...')
+        batchsize = np.random.randint(1, 65, size=args.num_val)
+        seq_len = np.random.randint(1, 513, size=args.num_val)
+        embed_dim = np.random.randint(32, 1025, size=args.num_val)
+        precision = (np.ones(args.num_val) * 32).astype(int)
+        
+        timeUsed = np.zeros([args.num_val, args.repetitions])
+                
+        for rep in range(args.repetitions):
+            print(f"Benchmarking positional encoding, starting repetition {rep}")
+            for i in range(args.num_val):
+                try:
+                    timeUsed[i, rep] = PositionalEncodingBenchmark(
+                        batchsize[i],
+                        seq_len[i],
+                        embed_dim[i],
+                        args.iter_warmup,
+                        args.iter_benchmark,
+                        device,
+                    ).run_benchmark()
+
+                except RuntimeError as e:
+                    print(f'Error: {e}')
+                    timeUsed[i, rep] = None
+                
+                if (i + 1) % 100 == 0:
+                    print(f"Iteration {i + 1}/{args.num_val}: Finished positional encoding {i + 1}/{args.num_val} (Rep {rep + 1}/{args.repetitions})")
+                
+                gc.collect()
+            if device == 'cuda':
+                torch.cuda.empty_cache()
+                
+        # Save results
+        print("Saving results")
+        df_results = pd.DataFrame({
+            'batchsize': batchsize,
+            'seq_len': seq_len,
+            'embed_dim': embed_dim,
+            'precision': precision,
+            'timeUsed_median': np.median(timeUsed, 1),
+            'timeUsed_min': np.min(timeUsed, 1),
+            'timeUsed_max': np.max(timeUsed, 1),
+            'timeUsed_std': np.std(timeUsed, 1)})
+        
+        
+        print(df_results)
+        df_results.to_csv(f'{logfile}.csv')
+    
+    
+    ########### Benchmark Embedding ##########
+    if args.testEmbedding:
+        if args.logfile == '':
+            logfile = str('%s/benchmark_embedding_%s_%s'
+                          % (args.logdir, args.device, time.strftime("%Y%m%d")))
+        else:
+            logfile = '%s/%s' % (args.logdir, args.logfile)
+        
+        # Set random parameters
+        batchsize = np.random.randint(1, 65, size=args.num_val)
+        seq_len = np.random.randint(1, 513, size=args.num_val)
+        vocab_size = np.random.randint(1000, 100001, size=args.num_val)
+        embed_dim = np.random.randint(32, 1025, size=args.num_val)
+        optimizer = np.zeros(args.num_val, dtype=np.int32)
+        precision = (np.ones(args.num_val) * 32).astype(int)
+        
+        timeUsed = np.zeros([args.num_val, args.repetitions])
+        
+        for i in range(args.num_val):
+            if np.random.rand() <= args.backprop_ratio:
+                optimizer[i] = np.random.randint(1, len(optimizer_list))
+            else:
+                optimizer[i] = 0
+        
+        for rep in range(args.repetitions):
+            print(f"Benchmarking embedding, starting repetition {rep}")
+            for i in range(args.num_val):
+                try:
+                    timeUsed[i, rep] = EmbeddingBenchmark(
+                        batchsize[i],
+                        seq_len[i],
+                        vocab_size[i],
+                        embed_dim[i],
+                        optimizer_list[optimizer[i]],
+                        args.iter_warmup,
+                        args.iter_benchmark,
+                        device,
+                    ).run_benchmark()
+
+                except RuntimeError as e:
+                    print(f'Error: {e}')
+                    timeUsed[i, rep] = None
+                
+                if (i + 1) % 100 == 0:
+                    print(f"Iteration {i + 1}/{args.num_val}: Finished embedding {i + 1}/{args.num_val} (Rep {rep + 1}/{args.repetitions})")
+                
+                gc.collect()
+            if device == 'cuda':
+                torch.cuda.empty_cache()
+        
+        # Save results
+        print("Saving results")
+        df_results = pd.DataFrame({
+            'batchsize': batchsize,
+            'seq_len': seq_len,
+            'vocab_size': vocab_size,
+            'embed_dim': embed_dim,
+            'precision': precision,
+            'optimizer': optimizer,
+            'timeUsed_median': np.median(timeUsed, 1),
+            'timeUsed_min': np.min(timeUsed, 1),
+            'timeUsed_max': np.max(timeUsed, 1),
+            'timeUsed_std': np.std(timeUsed, 1)
+        })
+        
+        print(df_results)
+        df_results.to_csv(f'{logfile}.csv')
     
     
     ########### Benchmark RNN ##########
@@ -114,9 +384,9 @@ def main():
                         rnn_type[i],
                         activation_list[activation_fct[i]],
                         optimizer_list[optimizer[i]],
-                        device,
                         args.iter_warmup,
-                        args.iter_benchmark
+                        args.iter_benchmark,
+                        device,
                     ).run_benchmark()
 
                 except RuntimeError as e:
@@ -127,7 +397,8 @@ def main():
                     print(f"Iteration {i + 1}/{args.num_val}: Finished RNN {i + 1}/{args.num_val} (Rep {rep + 1}/{args.repetitions})")
                 
                 gc.collect()
-            torch.cuda.empty_cache()
+            if device == 'cuda':
+                torch.cuda.empty_cache()
             
         # Save results
         print("Saving results")
@@ -198,9 +469,9 @@ def main():
                         activation_list[activation_fct[i]],
                         use_bias[i],
                         optimizer_list[optimizer[i]],
-                        device,
                         args.iter_warmup,
-                        args.iter_benchmark
+                        args.iter_benchmark,
+                        device,
                     ).run_benchmark()
 
                 except RuntimeError as e:
@@ -211,7 +482,8 @@ def main():
                     print(f"Iteration {i + 1}/{args.num_val}: Finished convolution {i + 1}/{args.num_val} (Rep {rep + 1}/{args.repetitions})")
                 
                 gc.collect()
-            torch.cuda.empty_cache()  # Clear GPU memory
+            if device == 'cuda':
+                torch.cuda.empty_cache()
         
         # Save results
         print("Saving results")
@@ -269,9 +541,9 @@ def main():
                         dim_output[i],
                         activation_list[activation_fct[i]],
                         optimizer_list[optimizer[i]],
-                        device,
                         args.iter_warmup,
-                        args.iter_benchmark
+                        args.iter_benchmark,
+                        device,
                     ).run_benchmark()
 
                 except RuntimeError as e:
@@ -282,7 +554,8 @@ def main():
                     print(f"Iteration {i + 1}/{args.num_val}: Finished dense layer {i + 1}/{args.num_val} (Rep {rep + 1}/{args.repetitions})")
                 
                 gc.collect()
-            torch.cuda.empty_cache()  # Clear GPU memory
+            if device == 'cuda':
+                torch.cuda.empty_cache()
         
         # Save results
         print("Saving results")

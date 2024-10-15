@@ -14,9 +14,9 @@ class BenchmarkConv:
                  activation,
                  use_bias,
                  optimizer,
-                 device,
                  warmup_iterations,
-                 benchmark_iterations):
+                 benchmark_iterations,
+                 device='cuda'):
 
         self.batch_size = batchsize
         self.matsize = matsize
@@ -28,9 +28,9 @@ class BenchmarkConv:
         self.activation = activation
         self.use_bias = use_bias
         self.optimizer = optimizer
-        self.device = device
         self.warmup_iterations = warmup_iterations
         self.benchmark_iterations = benchmark_iterations
+        self.device = device
         
         self.activation_fn = None
         self.optimizer_fn = None
@@ -88,15 +88,18 @@ class BenchmarkConv:
 
 
         # Benchmark phase
-        torch.cuda.synchronize()  # Ensure GPU timing accuracy
+        if self.device == 'cuda':
+            torch.cuda.synchronize()
+
         start_time = time.time()
         for _ in range(self.benchmark_iterations):
             y = self._forward_pass()
             if self.optimizer_fn:
                 self._backward_pass(y)
-        torch.cuda.synchronize()
-        end_time = time.time()
 
+        if self.device == 'cuda':
+            torch.cuda.synchronize()
+        end_time = time.time()
 
         # Return time in ms
         return (end_time - start_time) / self.benchmark_iterations * 1000

@@ -12,9 +12,9 @@ class BenchmarkRNN:
                  rnn_type,
                  activation,
                  optimizer,
-                 device,
                  warmup_iterations,
-                 benchmark_iterations):
+                 benchmark_iterations,
+                 device='cuda'):
         
         self.batchsize = batchsize
         self.seq_len = seq_len
@@ -25,9 +25,9 @@ class BenchmarkRNN:
         self.rnn_type = rnn_type
         self.activation = activation
         self.optimizer = optimizer
-        self.device = device
         self.warmup_iterations = warmup_iterations
         self.benchmark_iterations = benchmark_iterations
+        self.device = device
         
         # Initialize the RNN (LSTM, GRU, or RNN)
         if self.rnn_type in ['LSTM', 'GRU', 'RNN']:
@@ -78,13 +78,17 @@ class BenchmarkRNN:
                 self._backward_pass(y)
 
         # Benchmark phase
-        torch.cuda.synchronize()  # Ensure GPU timing accuracy
+        if self.device == 'cuda':
+            torch.cuda.synchronize()  # Ensure GPU timing accuracy
+
         start_time = time.time()
         for _ in range(self.benchmark_iterations):
             y = self._forward_pass()
             if self.optimizer_fn:
                 self._backward_pass(y)
-        torch.cuda.synchronize()
+        
+        if self.device == 'cuda':
+            torch.cuda.synchronize()
         end_time = time.time()
 
         # Return time in ms per iteration
