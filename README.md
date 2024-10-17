@@ -29,8 +29,9 @@ python -m pip install -r requirements.txt
 To gather training data for a specific GPU, navigate to the `data_collection` directory and run a benchmark. For example, to test RNN models, use the following command:
 
 ```bash
+mkdir data
 cd data_collection
-python -m --testRNN --num_val 20000 --repetitions 5 --log_dir ../data 
+python run.py --testRNN --num_val=20000 --repetitions=5 --log_dir=../data 
 ```
 
 This command will run the benchmark for RNN models with 20,000 validation examples and repeat the process 5 times to gather data. The results will be saved in the `data` directory.
