@@ -42,7 +42,7 @@ parser.add_argument('--backprop_ratio', type=float, default=0.5,
                     help='Ratio of iterations with backward pass ([0..1])')
 parser.add_argument('--num_val', type=int, default=100,
                     help='Number of results to compute')
-parser.add_argument('--logdir', type=str, default='../data',
+parser.add_argument('--logdir', type=str, default='./',
                     help='Directory to store results')
 parser.add_argument('--logfile', type=str, default='',
                     help='Text file to store results')
