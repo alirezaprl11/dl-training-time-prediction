@@ -165,23 +165,26 @@ def main():
                 optimizer[i] = np.random.randint(1, len(optimizer_list))
             else:
                 optimizer[i] = 0
+                
+        embed_dim = []
+        for i in range(args.num_val):
+            min_embed_dim = num_heads_list[i] * 8  # Minimum to ensure divisibility
+            max_embed_dim = 768  # Max embed_dim = 768, common in BERT base
+            em_dim = random.randint(min_embed_dim, max_embed_dim)
+            em_dim = (em_dim // num_heads_list[i]) * num_heads_list[i]
+            embed_dim.append(em_dim)
+        embed_dim = np.array(embed_dim)
+            
         
         for rep in range(args.repetitions):
             print(f"Benchmarking attention, starting repetition {rep}")
             for i in range(args.num_val):
-                num_heads = num_heads_list[i]
-
-                # Ensure embed_dim is divisible by num_heads
-                min_embed_dim = num_heads * 8  # Minimum to ensure divisibility
-                max_embed_dim = 768 # Max embed_dim = 768, common in BERT base
-                embed_dim = random.randint(min_embed_dim, max_embed_dim)
-                embed_dim = (embed_dim // num_heads) * num_heads
                 
                 try:
                     timeUsed[i, rep] = MultiHeadAttentionBenchmark(
                         batchsize[i],
                         seq_len[i],
-                        embed_dim,
+                        embed_dim[i],
                         num_heads_list[i],
                         optimizer_list[optimizer[i]],
                         args.iter_warmup,
