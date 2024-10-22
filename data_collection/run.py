@@ -204,6 +204,7 @@ def main():
         df_results = pd.DataFrame({
             'batchsize': batchsize,
             'seq_len': seq_len,
+            'embed_dim': embed_dim,
             'num_heads': num_heads_list,
             'precision': precision,
             'optimizer': optimizer,
