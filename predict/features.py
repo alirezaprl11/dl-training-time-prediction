@@ -177,29 +177,23 @@ class PreprocessAttentionFeatures(Preprocessor):
                                                                          5:'RMSProp'})
         
         
-        flops_projection = self.features['batchsize'] * (self.features['seq_len'] * self.features['embed_dim'] ** 2)
-        flops_qk = self.features['batchsize'] * (self.features['seq_len'] ** 2 * self.features['embed_dim'])
-        flops_softmax = self.features['batchsize'] * (self.features['seq_len'] ** 2)
-        flops_weighted_sum = self.features['batchsize'] * (self.features['seq_len'] ** 2 * self.features['embed_dim'])
-        flops_output_projection = self.features['batchsize'] * (self.features['seq_len'] * self.features['embed_dim'] ** 2)
+        comp_ops_projection = self.features['batchsize'] * (self.features['seq_len'] * self.features['embed_dim'] ** 2)
+        comp_ops_qk = self.features['batchsize'] * (self.features['seq_len'] ** 2 * self.features['embed_dim'])
+        comp_ops_softmax = self.features['batchsize'] * (self.features['seq_len'] ** 2)
+        comp_ops_weighted_sum = self.features['batchsize'] * (self.features['seq_len'] ** 2 * self.features['embed_dim'])
+        comp_ops_output_projection = self.features['batchsize'] * (self.features['seq_len'] * self.features['embed_dim'] ** 2)
         
-        self.features['flops'] = self.features['num_heads'] * (flops_projection + 2 * flops_qk + flops_softmax + flops_weighted_sum + flops_output_projection)
+        self.features['comp_ops'] = self.features['num_heads'] * (comp_ops_projection + 2 * comp_ops_qk + comp_ops_softmax + comp_ops_weighted_sum + comp_ops_output_projection)
         
         if self._include_additional_features:
             self.features['memory_projection'] = 3 * self.features['batchsize'] * self.features['seq_len'] * self.features['embed_dim']
             self.features['memory_attention'] = self.features['batchsize'] * self.features['seq_len'] * self.features['seq_len']
             self.features['memory_out'] = self.features['batchsize'] * self.features['seq_len'] * self.features['embed_dim']
             
-            # self.features['memory_read'] = 0.004 * (self.features['memory_projection'] + self.features['memory_attention'] + self.features['memory_out']) / self.features['GPU Memory Bandwidth (GB/s)']
-            # self.features['memory_write'] = 0.004 * (self.features['memory_projection'] + self.features['memory_attention'] + self.features['memory_out']) / self.features['GPU Memory Bandwidth (GB/s)']
-            
-            self.features['memory_total'] = self.features['memory_projection'] + self.features['memory_attention'] + self.features['memory_out']
-            
-            # self.features['memory_write'] = np.where(self.features['optimizer'] != 'None', self.features['memory_write'] + (self.features['memory_projection'] + self.features['memory_attention'] + self.features['memory_out']), self.features['memory_write'])
-            
+            self.features['memory_total'] = self.features['memory_projection'] + self.features['memory_attention'] + self.features['memory_out']            
             self.features['memory_total'] = np.where(self.features['optimizer'] != 'None', self.features['memory_total'] + 2 * (self.features['memory_projection'] + self.features['memory_attention'] + self.features['memory_out']), self.features['memory_total'])
 
-            self.features['flops/speed'] = self.features['flops'] / self.features['FP32']
+            self.features['comp_time'] = self.features['comp_ops'] / self.features['FP32']
         
         categorical_features = ['Memory Type', 'Bus', 'optimizer']
 
@@ -286,19 +280,14 @@ class PreprocessEmbeddingFeatures(Preprocessor):
                                                                          5:'RMSProp'})
         
         if self._include_additional_features:
-            self.features['flops'] = (self.features['batchsize'] * self.features['seq_len'] * self.features['embed_dim'])
+            self.features['comp_ops'] = (self.features['batchsize'] * self.features['seq_len'] * self.features['embed_dim'])
         
             self.features['memory_embeddings'] = self.features['vocab_size'] * self.features['embed_dim']
             self.features['memory_in'] = self.features['batchsize'] * self.features['seq_len'] * self.features['embed_dim']
             self.features['memory_total'] = self.features['memory_embeddings'] + self.features['memory_in']
             self.features['memory_total'] = np.where(self.features['optimizer'] != 'None', 2 * self.features['memory_total'], self.features['memory_total'])
             
-            # self.features['memory_read'] = 0.004 * (self.features['memory_in'] + self.features['memory_embeddings'] + np.where(self.features['optimizer'] != 'None', self.features['memory_in'] + self.features['memory_embeddings'], 0)) / self.features['GPU Memory Bandwidth (GB/s)']
-            # self.features['memory_write'] = 0.004 * (self.features['memory_in'] + np.where(self.features['optimizer'] != 'None', self.features['memory_in'] + self.features['memory_embeddings'], 0)) / self.features['GPU Memory Bandwidth (GB/s)']
-            
-            # self.features['memory_total_t'] = self.features['memory_read'] + self.features['memory_write']
-            
-            self.features['flops/speed'] = self.features['flops'] / self.features['FP32']
+            self.features['comp_time'] = self.features['comp_ops'] / self.features['FP32']
         
         categorical_features = ['optimizer', 'Memory Type', 'Bus']
 
@@ -351,11 +340,11 @@ class PreprocessDenseFeatures(Preprocessor):
         
         
         if self._include_additional_features:
-            self.features['flops'] = (
+            self.features['comp_ops'] = (
                 self.features['batchsize'] * self.features['dim_input'] * self.features['dim_output'] * 2
             )
             
-            self.features['flops/speed'] = self.features['flops'] / self.features['FP32']
+            self.features['comp_time'] = self.features['comp_ops'] / self.features['FP32']
             
             self.features['memory_weights'] = self.features['dim_input'] * self.features['dim_output']
             self.features['memory_in'] = self.features['batchsize'] * self.features['dim_input']
@@ -363,11 +352,6 @@ class PreprocessDenseFeatures(Preprocessor):
             
             self.features['memory_total'] = self.features['memory_in'] + self.features['memory_out'] + self.features['memory_weights']
             self.features['memory_total'] = np.where(self.features['optimizer'] != 'None', 2 * self.features['memory_total'], self.features['memory_total'])
-            
-            # self.features['memory_read'] = 0.004 * (self.features['memory_in'] + self.features['memory_weights'] + np.where(self.features['optimizer'] != 'None', self.features['memory_weights'], 0)) / self.features['GPU Memory Bandwidth (GB/s)']
-            # self.features['memory_write'] = 0.004 * (self.features['memory_out'] + np.where(self.features['optimizer'] != 'None', self.features['memory_weights'], 0)) / self.features['GPU Memory Bandwidth (GB/s)']
-            
-            # self.features['memory_total_t'] = self.features['memory_read'] + self.features['memory_write']
         
         categorical_features = ['activation_fct', 'optimizer', 'Memory Type', 'Bus']
 
@@ -422,13 +406,13 @@ class PreprocessConvFeatures(Preprocessor):
 
             elements_output = ((self.features['matsize'] - padding_reduction) / self.features['strides'])**2
 
-            self.features['flops'] = (self.features['batchsize']
+            self.features['comp_ops'] = (self.features['batchsize']
                 * elements_output
                 * self.features['kernelsize']**2
                 * self.features['channels_in']
                 * self.features['channels_out'])
             
-            self.features['flops/speed'] = self.features['flops'] / self.features['FP32']
+            self.features['comp_time'] = self.features['comp_ops'] / self.features['FP32']
             
             self.features['memory_weights'] = (self.features['kernelsize']**2
                     * self.features['channels_in']
@@ -445,11 +429,6 @@ class PreprocessConvFeatures(Preprocessor):
             
             self.features['memory_total'] = self.features['memory_in'] + self.features['memory_out'] + self.features['memory_weights']
             self.features['memory_total'] = np.where(self.features['optimizer'] != 'None', 2 * self.features['memory_total'], self.features['memory_total'])
-            
-            # self.features['memory_read'] = 0.004 * (self.features['memory_in'] + self.features['memory_weights'] + np.where(self.features['optimizer'] != 'None', self.features['memory_weights'], 0)) / self.features['GPU Memory Bandwidth (GB/s)']
-            # self.features['memory_write'] = 0.004 * (self.features['memory_out'] + np.where(self.features['optimizer'] != 'None', self.features['memory_weights'], 0)) / self.features['GPU Memory Bandwidth (GB/s)']
-            
-            # self.features['memory_total_t'] = self.features['memory_read'] + self.features['memory_write']
         
         self.features['use_bias'] = self.features['use_bias'].astype(int)
         
@@ -510,20 +489,16 @@ class PreprocessRNNFeatures(Preprocessor):
             dim_input = self.features['dim_input'].values
             dim_hidden = self.features['dim_hidden'].values
 
-            # Compute FLOPs based on rnn_type
-            lstm_flops = (batchsize * seq_len * (4 * (2 * (dim_input * dim_hidden + dim_hidden ** 2) + dim_hidden) + 2 * dim_hidden))
-            gru_flops = (batchsize * seq_len * (3 * (2 * (dim_input * dim_hidden + dim_hidden ** 2) + dim_hidden) + 2 * dim_hidden))
-            rnn_flops = (batchsize * seq_len * (2 * (dim_input * dim_hidden + dim_hidden ** 2) + dim_hidden))
-            
-            # Apply the FLOPs calculation based on RNN type
-            self.features['flops'] = np.where(self.features['rnn_type'] == 'LSTM', lstm_flops,
-                                            np.where(self.features['rnn_type'] == 'GRU', gru_flops, rnn_flops))
+            lstm_ops = (batchsize * seq_len * (4 * (2 * (dim_input * dim_hidden + dim_hidden ** 2) + dim_hidden) + 2 * dim_hidden))
+            gru_ops = (batchsize * seq_len * (3 * (2 * (dim_input * dim_hidden + dim_hidden ** 2) + dim_hidden) + 2 * dim_hidden))
+            rnn_ops = (batchsize * seq_len * (2 * (dim_input * dim_hidden + dim_hidden ** 2) + dim_hidden))
 
-            # Double the FLOPs if bidirectional
-            self.features['flops'] = np.where(self.features['is_bidirectional'] == 1, 2 * self.features['flops'], self.features['flops'])
+            self.features['comp_ops'] = np.where(self.features['rnn_type'] == 'LSTM', lstm_ops,
+                                            np.where(self.features['rnn_type'] == 'GRU', gru_ops, rnn_ops))
 
-            # Triple the FLOPs if an optimizer is present
-            self.features['flops'] = np.where(self.features['optimizer'] != 'None', 3 * self.features['flops'], self.features['flops'])
+            self.features['comp_ops'] = np.where(self.features['is_bidirectional'] == 1, 2 * self.features['comp_ops'], self.features['comp_ops'])
+
+            self.features['comp_ops'] = np.where(self.features['optimizer'] != 'None', 3 * self.features['comp_ops'], self.features['comp_ops'])
 
             # Memory Calculation
             lstm_memory_weights = 4 * (dim_input * dim_hidden + dim_hidden ** 2)
@@ -536,17 +511,11 @@ class PreprocessRNNFeatures(Preprocessor):
             self.features['memory_weights'] = np.where(self.features['rnn_type'] == 'LSTM', lstm_memory_weights,
                                                     np.where(self.features['rnn_type'] == 'GRU', gru_memory_weights, rnn_memory_weights))
 
-            # Double the memory weights if bidirectional
             self.features['memory_weights'] = np.where(self.features['is_bidirectional'] == 1, 2 * self.features['memory_weights'], self.features['memory_weights'])
-
-            # Double the memory weights if an optimizer is used
             self.features['memory_weights'] = np.where(self.features['optimizer'] != 'None', 2 * self.features['memory_weights'], self.features['memory_weights'])
-
-            # Calculate the total memory usage
             self.features['memory_total'] = self.features['memory_in'] + self.features['memory_out'] + self.features['memory_weights']
 
-            # Calculate FLOPs/speed (example metric)
-            self.features['flops/speed'] = self.features['flops'] / self.features['FP32']
+            self.features['comp_time'] = self.features['comp_ops'] / self.features['FP32']
         
         categorical_features = ['activation_fct', 'optimizer', 'rnn_type', 'Memory Type', 'Bus']
 
