@@ -44,7 +44,8 @@ This command will run the benchmark for RNN models with 20,000 validation exampl
 
 
 ## Experiments
-1. Selecting the Best Performing Models for Layer Computation Time Prediction
+
+### Selecting the Best Performing Models for Layer Computation Time Prediction
 In the first experiment, we focused on identifying the most effective machine learning models for the regression task of predicting the computation time for various types of layers commonly used in deep learning models. Different layer configurations were benchmarked under multiple settings. We evaluated several regression models and selected the top performers based on accuracy and generalization to unseen data. This step was crucial for building robust prediction models that could accurately estimate the computation time of different layer types under various hardware conditions. These are the selected models for each layer type:
 
 <div align="center">
@@ -60,13 +61,13 @@ In the first experiment, we focused on identifying the most effective machine le
 
 </div>
 
-2. Testing Generalization Across Unseen GPUs
+### Testing Generalization Across Unseen GPUs
 In the second experiment, we assessed how well the prediction models generalize to unseen hardware, specifically GPUs that were not part of the training set. We conducted two variations of this experiment: one with the proposed set of features and one without. By comparing both scenarios, we evaluated the impact of the additional features on model performance. This experiment was designed to determine how well the models could extrapolate their predictions to new hardware environments and how the inclusion of the proposed features influenced prediction accuracy. Here are some of the results for all the benchmarked layers. The numbers on the bars showcase the total improvement in prediction accuracy when using the proposed features trained on an MLP compared to the baseline MLP model.
 
 ![MLPvsPreNeTUnseenGPU](./docs/MLPvsPreNeTUnseenGPU.png "MLPvsPreNeTUnseenGPU")
 
 
-3. Predicting Training Time for Large Models
+### Predicting Training Time for Large Models
 The final experiment aimed to test the models' capability to predict the training time for larger and more complex machine learning models, such as VGG16 and BERT. These models, due to their size and architectural complexity, provide a challenging test case for the prediction models. We analyzed the models’ performance to see how well they scale when applied to full-scale architectures compared to smaller, individual layers. This experiment provided insights into how effective the prediction models are when tasked with estimating computation times for end-to-end training processes. Here are the results for VGG16 model. The numbers on the bars showcase the total error in prediction for training time under different batch sizes when using the proposed features compared to the baseline model.
 
 ![Batch16-VGG-16](./docs/Batch16-VGG-16.png "Batch16-VGG-16")
