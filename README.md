@@ -1,8 +1,8 @@
-# DL Execution Time Prediction
+# DL Models Training Time Prediction
 
-We have developed a framework that allows users to predict the execution time of various deep learning models and architectures. This is achieved by gathering execution times of different deep learning layer types under diverse configurations.
+We have developed a framework that allows users to predict the training time of various deep learning models and architectures. This is achieved by gathering execution times of different deep learning layer types under diverse configurations.
 
-After collecting this data which is shown in the following figure, we trained and evaluated multiple machine learning models for the regression task of predicting execution times for individual layers. The best-performing model for each layer type was selected and is now used to provide accurate predictions of execution times. This approach helps users estimate model performance and make informed decisions when designing or optimizing neural networks.
+After collecting this data which is shown in the following figure, we trained and evaluated multiple machine learning models for the regression task of predicting training times for individual layers. The best-performing model for each layer type was selected and is now used to provide accurate predictions of training times. This approach helps users estimate model performance and make informed decisions when designing or optimizing neural networks.
 
 ![System Overview](./docs/CFPredOverview.png "System Architecture")
 
